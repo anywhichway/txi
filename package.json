@@ -1,0 +1,41 @@
+{
+  "name": "txi",
+  "version": "v0.0.1",
+  "description": "Small, focused full-text indexing and search for any JavaScript application",
+  "engines": {},
+  "license": "MIT",
+  "scripts": {
+    "prepare": "cp index.js ./browser/txi.js && uglifyjs browser/txi.js --mangle -o browser/txi.min.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anywhichway/txi.git"
+  },
+  "keywords": [
+    "trigram",
+    "search",
+    "index",
+    "token",
+    "elasticsearch"
+  ],
+  "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
+  "bugs": {
+    "url": "https://github.com/anywhichway/txi/issues"
+  },
+  "homepage": "https://github.com/anywhichway/txi#readme",
+  "devDependencies": {
+    "benchmark": "^2.1.3",
+    "blanket": "^1.2.3",
+    "chai": "^3.4.1",
+    "codacy-coverage": "^2.0.0",
+    "codeclimate-test-reporter": "^0.2.0",
+    "istanbul": "^0.4.2",
+    "mocha": "^2.3.4",
+    "uglify-es": "^3.1.6",
+    "benchtest": "^2.0.2"
+  },
+  "dependencies": {
+    "node-fetch": "^2.3.0",
+    "xmldom": "^0.1.27"
+  }
+}
