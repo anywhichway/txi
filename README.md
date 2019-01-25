@@ -4,25 +4,31 @@ Small, focused full-text indexing and search for any JavaScript application.
 
 Txi does just two things:
 
-1) It creates a full text index of strings or JavaScript objects passed to it.
+1) It creates a full text index of strings or JavaScript objects passed to it and associated it with an id also passed it.
 
-2) It supports index searching and returns a rank ordered list of matches.
+2) It supports index searching and returns a rank ordered list of matches including the id to be used by the calling application to retrieve the original data.
 
 Txi indexes are just JSON objects that can be saved and restored like any other JSON object.
+
+By default, `txi` minimizes false positives and false negatives by using a scoring mechanism that takes into account stems, misspellings, trigrams, and disemvoweled versions of words. This can be tuned to reduce memory usage if desired.
 
 It doesn't get much simpler than this:
 
 ```javascript
-
 const `txi` = Txi();
 
-`txi`.index("text1","This has a lot of stop words in it that will be ignored as content");
-`txi`.index("text2","However, the storage of meanigful content is far more interesting.");
-`txi`.index("object1",{name:"joe",address:{city:"Seattle",state:"WA"}});
-`txi`.index("text3","Go Seattle Sea Hawks!");
+txi.index("text1","This has a lot of stop words in it that will be ignored as content");
 
-console.log(`txi`.search("Seatle")); // note the typo
+txi.index("text2","However, the storage of meanigful content is far more interesting.");
+
+txi.index("object1",{name:"joe",address:{city:"Seattle",state:"WA"}});
+
+txi.index("text3","Go Seattle Sea Hawks!");
+
+console.log(`txi`.search("Seatle")); // note the typo, it will still be found
+
 console.log("Seatle",`txi`.search("Seattle"));
+
 console.log("Meaningful",`txi`.search("meanigful content"));
 ```
 
@@ -35,12 +41,14 @@ will print the below for the commented search strings
     stems: { seatl: 1 },
     trigrams: {},
     compressions: {} } ]
+    
 [ { id: 'text3', // Seattle
     score: 1,
     count: 1,
     stems: { seattl: 1 },
     trigrams: {},
     compressions: {} } ]
+    
 [ { id: 'text2', // meanigful content 
     score: 2,
     count: 2,
@@ -57,9 +65,11 @@ will print the below for the commented search strings
 
 ## API
 
-### Constructor - Txi({Array stops,boolean stems=true,boolean trigrams=true,boolean compressions=true,boolean misspellings=true})
+### Constructor
 
-Creates a Txi text indexer with default settings. The boolean flags indicate which features of `txi` to turn on. Using `new` is not required. 
+`Txi({Array stops,boolean stems=true,boolean trigrams=true,boolean compressions=true,boolean misspellings=true})`
+
+Creates a Txi text indexer with default settings. The boolean flags indicate which features of `txi` to turn on. See [ Managing Memory and Accuracy](#managing-memory-and-accuracy) for more details. Using `new` is not required. 
 
 `Array stops` - Replaces the array of stop words, i.e. words that are not added to the index.
 
@@ -73,7 +83,7 @@ As items are deleted from the index, keys may end-up without id entries. This re
 
 ### object getIndex() 
 
-Returns a copy of the internal index data structure.
+Returns a copy of the internal index data structure. See [Index Structure](#index-structure) below for more details.
 
 ### integer index(string||number id,string||object data)
 
@@ -108,11 +118,11 @@ This function is provided for efficiency. Returns the current number of keys.
 
 ### Txi setIndex(object initialValues)
 
-Uses `initialValues` to initialize the internal index. Returns the Txi instance.
+Uses `initialValues` to initialize the internal index. Returns the Txi instance. See [Index Structure](#index-structure) below to understand `initialValues` better.
 
 ### onchange function callback
 
-Setting the property `onchange` to `callback` causes `callback` to be invoked with all the index changes made every time `index` is called. The `callback` receives an argument that has the same structure as an index. It is provided so that the program using `txi` can store the index updates. Typically, an asynchronous callback should be used to ensure high performance. See the section below `Index Structure` for more details.
+Setting the property `onchange` to `callback` causes `callback` to be invoked with all the index changes made every time `index` is called. The `callback` receives an argument that has the same structure as an index. It is provided so that the program using `txi` can store the index updates. Typically, an asynchronous callback should be used to ensure high performance. See [Index Structure](#index-structure) and [Updating an Index](#updating-an-index) below for more details.
 
 ### Txi remove(string||number id)
 
@@ -326,5 +336,7 @@ tokenize - To remove all punctuation and return an array of words that were sepa
 trigram - The series of all three letter character sequences in a string that has punctuation and spaces removed.
 
 ## Updates (reverse chronological order)
+
+2019-01-23 v0.0.2b Documentation updates
 
 2019-01-23 v0.0.1b Initial public release
