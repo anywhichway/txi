@@ -4,7 +4,7 @@ Small, focused full-text indexing and search for any JavaScript application.
 
 Txi does just two things:
 
-1) It creates a full text index of strings or JavaScript objects passed to it and associated it with an id also passed it.
+1) It creates a full text index of strings or JavaScript objects passed to it and associates it with an id also passed in.
 
 2) It supports index searching and returns a rank ordered list of matches including the id to be used by the calling application to retrieve the original data.
 
