@@ -396,6 +396,8 @@ Note, if you are indexing or searching JavaScript objects, you can't turn off st
 
 ## Updates (reverse chronological order)
 
+2019-01-26 v0.0.5b Packaging fix
+
 2019-01-26 v0.0.4b Improved object indexing. Moved to async API so that no in memory index is required if storage functions are porvided by the calling application. For this build there is no minimized version.
 
 2019-01-25 v0.0.3b Documentation updates
