@@ -36,9 +36,9 @@ if(typeof(module)!=="undefined") {
 	txi.index("object1",{name:"joe",address:{city:"Seattle",state:"WA"}});
 	txi.index("text3","Go Seattle Sea Hawks!");
 
-	console.log("Seatle",txi.search("Seatle")); // note the typo
-	console.log("Seatle",txi.search("Seattle"));
-	console.log("Meaningful",txi.search("meanigful content"));
+	console.log(txi.search("Seatle")); // note the typo
+	console.log(txi.search("Seattle"));
+	console.log(txi.search("meanigful content"));
 	
 	txi = Txi();
 	txi.index("text1","In March, the solidiers marched in solidarity with the peasants against the rich.");

@@ -25,42 +25,53 @@ txi.index("object1",{name:"joe",address:{city:"Seattle",state:"WA"}});
 
 txi.index("text3","Go Seattle Sea Hawks!");
 
-console.log(`txi`.search("Seatle")); // note the typo, it will still be found
+console.log(txi.search("Seatle")); // note the typo, it will still be found
 
-console.log("Seatle",`txi`.search("Seattle"));
+console.log(txi.search("Seattle"));
 
-console.log("Meaningful",`txi`.search("meanigful content"));
+console.log(txi.search("meanigful content"));
 ```
 
 will print the below for the commented search strings
 
 ```javascript
 [ { id: 'text3', // Seatle
-    score: 1,
-    count: 1,
+    score: 4,
+    count: 2,
     stems: { seatl: 1 },
-    trigrams: {},
-    compressions: {} } ]
+    trigrams: { sea: 1, eat: 0.5 },
+    compressions: { stl: 1.5 } } ]
     
 [ { id: 'text3', // Seattle
-    score: 1,
-    count: 1,
-    stems: { seattl: 1 },
-    trigrams: {},
-    compressions: {} } ]
-    
-[ { id: 'text2', // meanigful content 
-    score: 2,
+    score: 5,
     count: 2,
+    stems: { seattl: 1 },
+    trigrams: { sea: 1, eat: 0.5, att: 0.5, ttl: 0.5 },
+    compressions: { stl: 1.5 } } ]
+    
+[ { id: 'text2', // meanigful content
+    score: 10.25,
+    count: 4,
     stems: { meanig: 1, content: 1 },
-    trigrams: {},
-    compressions: {} },
+    trigrams:
+     { mea: 0.5,
+       ean: 0.5,
+       ani: 0.5,
+       nig: 0.5,
+       igc: 0.5,
+       gco: 0.5,
+       con: 0.5,
+       ont: 0.5,
+       nte: 1,
+       ten: 0.5,
+       ent: 0.5 },
+    compressions: { mng: 0.75, cntnt: 1.5 } },
   { id: 'text1',
-    score: 1,
-    count: 1,
+    score: 5,
+    count: 2,
     stems: { content: 1 },
-    trigrams: {},
-    compressions: {} } ]
+    trigrams: { con: 0.5, ont: 0.5, nte: 0.5, ten: 0.5, ent: 0.5 },
+    compressions: { cntnt: 1.5 } } ]
 ```
 
 ## API
@@ -136,7 +147,7 @@ Removes the `word`s provided from the words that are not indexed. Returns the Tx
 
 Search the index using the `criteria` and return a sorted array of potential matches. The `options` default to those values provided during creation of the instance. The `options` flag is used to controll memory useage and the return of false positives or negatives. See the section [Managing Memory and Accuracy](#managing-memory-and-accuracy) below.
 
-A `potentailMatch` has the form:
+A `potentialMatch` has the form:
 
 ```javascript
 { id: string||number
@@ -336,6 +347,8 @@ tokenize - To remove all punctuation and return an array of words that were sepa
 trigram - The series of all three letter character sequences in a string that has punctuation and spaces removed.
 
 ## Updates (reverse chronological order)
+
+2019-01-25 v0.0.3b Documentation updates
 
 2019-01-23 v0.0.2b Documentation updates
 
