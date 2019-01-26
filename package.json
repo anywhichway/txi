@@ -1,11 +1,11 @@
 {
   "name": "txi",
-  "version": "v0.0.3b",
+  "version": "v0.0.4b",
   "description": "Small, focused full-text indexing and search for any JavaScript application",
   "engines": {},
   "license": "MIT",
   "scripts": {
-    "prepare": "cp index.js ./browser/txi.js && uglifyjs browser/txi.js --mangle -o browser/txi.min.js"
+    "prepare": "cp index.js ./browser/txi.js"
   },
   "repository": {
     "type": "git",
@@ -31,7 +31,6 @@
     "codeclimate-test-reporter": "^0.2.0",
     "istanbul": "^0.4.2",
     "mocha": "^2.3.4",
-    "uglify-es": "^3.1.6",
     "benchtest": "^2.0.2"
   },
   "dependencies": {

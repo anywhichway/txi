@@ -1,4 +1,5 @@
 (function() {
+	"use strict";
 	var fetch, DOMParser;
 	if(typeof(module)!=="undefined") {
 		fetch = require("node-fetch");
@@ -55,13 +56,21 @@
 		// remove vowels from a word
 		_disemvowel = value => value.replace(/[AEIOUaeiou]+/g,""),
 		// disemvowel and remove spaces
-		_compress = value => Object.values(_disemvowel(value)).reduce((accum,char) => accum[accum.length-1]===char ? accum : accum += char,"");
+		_compress = value => Object.values(_disemvowel(value)).reduce((accum,char) => accum[accum.length-1]===char ? accum : accum += char,""),
 		// join all the tokens together and return an array of three letter sequences, stepping through string one char at a time
+		// except treat numbers as numbers
 		_trigrams = tokens => {
-			const grams = [],
-				str = Array.isArray(tokens) ? tokens.join("") : tokens+"";
-			for(let i=0;i<str.length-2;i++) {
-					grams.push(str.substring(i,i+3));
+			const {string,grams} = tokens.reduce((accum,token) => {
+					if(isNaN(parseFloat(token))) {
+						accum.string += token;
+					} else {
+						accum.grams.push(token);
+					}
+					return accum;
+				},{string:"",grams:[]})
+				//str = Array.isArray(tokens) ? tokens.join("") : tokens+"";
+			for(let i=0;i<string.length-2;i++) {
+					grams.push(string.substring(i,i+3));
 			}
 			return grams;
 		}
@@ -269,7 +278,7 @@
 		if(objectOrPrimitive && typeof(objectOrPrimitive)==="object" && !seen.has(objectOrPrimitive)) {
 			seen.add(objectOrPrimitive);
 			return Object.keys(objectOrPrimitive)
-				.reduce((accum,key) => accum +=  key + ": " + _toText(objectOrPrimitive[key],seen),"");
+				.reduce((accum,key,i,array) => accum +=  key + ": " + _toText(objectOrPrimitive[key],seen) + (i<array.length-1 ? " " : ""),"");
 		}
 		return objectOrPrimitive;
 	}
@@ -283,23 +292,41 @@
 		}
 	}
 
-	function Txi({stops,stems=true,trigrams=true,compressions=true,misspellings=true}={}) {
-		const defaults = {stops,stems,trigrams,compressions,misspellings};
+	function Txi({stops,stems=true,trigrams=true,compressions=true,misspellings=true,onchange,storage={}}={}) {
+		const defaults = {stops,stems,trigrams,compressions,misspellings,onchange,storage};
 		// ensure Txi is called with the new operator
 		if(!this || !(this instanceof Txi)) {
 			return new Txi(defaults);
 		}
+		let {get,set,keys,count} = storage;
 		
 		// create stop map from array, stop words are not indexed
 		stops = (defaults.stops||STOPWORDS).reduce((accum,word) => { accum[word] = true; return accum;},{});
 		
-		const keys = {};
-		
 		// the map to store the index, which is of the form
-		// {[<characterSequence>:{<id>:{stems:<count>,trigrams:<count>,compressions:<count>}}[,...]}
+		// {[<characterSequence>:{<id>:{stems:<count>,trigrams:<count>,compressions:<count>,numbers:<count>,booleans:<count>}}[,...]}
 		let keycount = 0,
 			index = {}
 		
+		if(!keys) {
+			keys = async function* () {
+				let i = 0,
+					key = keys[i];
+				while(key) {
+					yield key;
+					key = keys[++i];
+				}
+			};
+		}
+		
+		if(!get) {
+			get = key => index[key];
+		}
+		
+		if(!set) {
+			set = (key,value) => index[key] = value;
+		}
+
 		// add words to the stop map created during instantiation
 		this.addStops = (...words) => { words.forEach((word) => stops[word] = true); return this; }
 		this.compress = () => {
@@ -332,19 +359,30 @@
 			return this; 
 		}
 		// remove the provided ids from the index
-		this.remove = (...ids) => {
+		this.remove = async (...ids) => {
 			const onchange = this.onchange || (() => {})
-			ids.forEach(id => Object.keys(index).forEach(word => { 
-				if(index[word][id]) { 
-					delete index[word][id];
-					onchange({[word]:{[id]:{stems:0,trigrams:0,compressions:0}}})
-				}}));
+			for(const id of ids) {
+				for await(const word of keys()) {
+					const node = await get(word);
+					if(node && node[id]) { 
+						delete node[id];
+						await set(word,node);
+						onchange({[word]:{[id]:{stems:0,trigrams:0,compressions:0}}})
+					}
+				}
+			}
 			return this;
 		}
 		// return the index so that the calling program can perhaps store it somewhere
 		this.getIndex = () => _copy(index);
-		this.getKeys = () => keys;
-		this.getKeyCount = () => keycount;
+		this.getKeys = async () => {
+			const results = {};
+			for await(const key of keys()) {
+				results[key] = true;
+			}
+			return results;
+		}
+		this.getKeyCount = () => count ? count() : keycount;
 		// set the index, in case the calling program is loading it from somewhere
 		this.setIndex = newIndex => { 
 			index = _copy(newIndex);
@@ -358,7 +396,7 @@
 		this.onchange = defaults.onchange;
 		// create an index entry with id by indexing objectOrText
 		// use the id, perhaps a URL< to lookup the full object when it is returned in search results
-		this.index = function(id,objectOrText,{stems=defaults.stems,trigrams=defaults.trigrams,compressions=defaults.compressions,misspellings=defaults.misspellings}=defaults) {
+		this.index = async function(id,objectOrText,{stems=defaults.stems,trigrams=defaults.trigrams,compressions=defaults.compressions,misspellings=defaults.misspellings}=defaults) {
 			const  type = typeof(objectOrText);
 			if(!objectOrText || !(type==="string" || type==="object")) {
 				return;
@@ -366,62 +404,102 @@
 			if(type==="object") {
 				stems = true;
 			}
-			const tokens = objectOrText ? _tokenize(_toText(objectOrText),type==="object") : [],
-				stemmed = (stems || type==="object" ? tokens.map(token => _stemmer(token)) : tokens).filter(stem => !stops[stem]),
-				noproperties = stemmed.filter(token => token[token.length-1]!==":"),
+			const text = _toText(objectOrText),
+				tokens = objectOrText ? _tokenize(text,type==="object") : [],
+				stemmed = (stems || type==="object" ? tokens.reduce((accum,token) => 
+					{ 
+						const type = typeof(token);
+						if(type!=="number" && type!=="boolean") {
+							const stem = _stemmer(token);
+							if(!stops[stem]) {
+								accum.push(stem);
+							}
+						}
+						return accum;
+					},[]) : []),
+				other = tokens.filter(token => token==="true" || token==="false" || !isNaN(parseFloat(token))),
+				noproperties = (stems ? stemmed : tokens).filter(token => token[token.length-1]!==":" && isNaN(parseFloat(token)) && token!=="true" && token!=="false"),
 				grams = trigrams ? _trigrams(noproperties) : [],
 				misspelled = (misspellings ? noproperties.reduce((accum,stem) => accum.concat(_misspellings(stem,true)),[]) : []).filter(word => !grams.includes(word)),
 				compressed = compressions ? noproperties.reduce((accum,stem) => accum.concat(_compress(stem)),[]).concat(misspelled.reduce((accum,stem) => accum.concat(_compress(stem)),[])) : [],
 				onchange = this.onchange || (() => {});
 			let changes,
 				count = 0;
-			stemmed.concat(misspelled).concat(compressed).forEach((word) => {
-					if(!stops[word]) {
-						let node = index[word],
+			for(const word of stemmed.concat(misspelled).concat(compressed).concat(other)) {
+					if(!stops[word]) { // check stops again in case a compression is a stop
+						const isboolean = word==="false" || word==="true",
+							isnumber = !isNaN(parseFloat(word));
+						let node = await get(word),
 							change;
-						if(stems && (stemmed.includes(word) || misspelled.includes(word))) {
-							if(!node) {
-								node = index[word] = {};
-								keys[word] = true;
-								count++;
-							}
-							if(!node[id]) {
-								node[id] =  {stems:0,trigrams:0,compressions:0};
-							}
-							node[id].stems++;
-							change = node[id];
-						}
-						if(compressions && compressed.includes(word)) {
-							if(!node) {
-								node = index[word] = {};
-								keys[word] = true;
-								count++;
-							}
-							if(!node[id]) {
-								node[id] =  {stems:0,trigrams:0,compressions:0};
-							}
-							node[id].compressions++;
-							change = node[id];
-						}
-						if(!changes) {
-							changes = {};
-						}
-						if(!changes[word]) {
-							changes[word] = {};
-						}
-						changes[word][id] = change;
-					}
-				});
-			grams.forEach((word) => {
-				if(!stops[word]) {
-					let node = index[word];
-					if(!node) {
-						node = index[word] = {};
 						keys[word] = true;
+						if(isboolean) {
+							if(!node) {
+								node = {};
+								count++;
+							}
+							if(!node[id]) {
+								node[id] =  {stems:0,trigrams:0,compressions:0,numbers:0,booleans:0};
+							}
+							node[id].boolean++;
+							change = node[id];
+						}
+						if(isnumber) {
+							if(!node) {
+								node = {};
+								count++;
+							}
+							if(!node[id]) {
+								node[id] =  {stems:0,trigrams:0,compressions:0,numbers:0,booleans:0};
+							}
+							node[id].numbers++;
+							change = node[id];
+						}
+						if(!isboolean && !isnumber) {
+							if(stems && (stemmed.includes(word) || misspelled.includes(word))) {
+								if(!node) {
+									node = {};
+									count++;
+								}
+								if(!node[id]) {
+									node[id] =  {stems:0,trigrams:0,compressions:0,numbers:0,booleans:0};
+								}
+								node[id].stems++;
+								change = node[id];
+							}
+							if(compressions && compressed.includes(word)) {
+								if(!node) {
+									node = {};
+									count++;
+								}
+								if(!node[id]) {
+									node[id] =  {stems:0,trigrams:0,compressions:0};
+								}
+								node[id].compressions++;
+								change = node[id];
+							}
+						}
+						if(change) {
+							if(!changes) {
+								changes = {};
+							}
+							if(!changes[word]) {
+								changes[word] = {};
+							}
+							changes[word][id] = change;
+							await set(word,node);
+						}
+					}
+			}
+			for(const word of grams) {
+				if(!stops[word]) {
+					let node = await get(word);
+					keys[word] = true;
+					if(!node) {
+						node = {};
 						count++;
 					}
 					if(!node[id]) {
-						node[id] = {stems:0,trigrams:0,compressions:0};
+						node[id] = {stems:0,trigrams:0,compressions:0,booleans:0,numbers:0};
 					}
 					node[id].trigrams++;
 					if(!changes) {
@@ -431,14 +509,15 @@
 						changes[word] = {};
 					}
 					changes[word][id] = node[id];
+					await set(word,node);
 				}
-			});
+			}
 			if(changes) onchange(changes);
 			keycount += count;
 			return this;
 		}
 		// return a sorted array of search results matching the provided objectOrText
-		this.search = function(objectOrText,{stems=defaults.stems,trigrams=defaults.trigrams,compressions=defaults.compressions,misspellings=defaults.misspellings}=defaults) {
+		this.search = async function(objectOrText,{all,stems=defaults.stems,trigrams=defaults.trigrams,compressions=defaults.compressions,misspellings=defaults.misspellings}=defaults) {
 			const  type = typeof(objectOrText);
 			if(!objectOrText || !(type==="string" || type==="object")) {
 				return [];
@@ -446,63 +525,111 @@
 			if(type==="object") {
 				stems = true;
 			}
-			const	tokens = objectOrText ? _tokenize(_toText(objectOrText),type==="object") : [],
-				stemmed = (stems || type==="object" ? tokens.map(token => _stemmer(token)) : tokens).filter(stem => !stops[stem]),
-				noproperties = stemmed.filter(token => token[token.length-1]!==":"),
-				grams = trigrams ? _trigrams(noproperties) : [],
-				compressed = compressions ? noproperties.map(stem => _compress(stem)) : [];
-				results = stemmed.concat(grams).concat(compressed).reduce((accum,word) => {
-					if(!stops[word]) {
-						const node = index[word];
-						if(node) {
-							Object.keys(node).forEach(id => {
-								if(!accum[id]) {
-									accum[id] = {score:0,count:0,stems:{},trigrams:{},compressions:{}};
-								}
-								let count = 0;
-								if(stems && stemmed.includes(word)) {
-									if(!accum[id].stems[word]) {
-										accum[id].stems[word] = 0;
-									}
-									accum[id].stems[word] += node[id].stems;
-									accum[id].score += node[id].stems;
-									count = 1;
-								}
-								if(trigrams && grams.includes(word)) {
-									if(!accum[id].trigrams[word]) {
-										accum[id].trigrams[word] = 0
-									}
-									const score = node[id].trigrams * .5;
-									accum[id].trigrams[word] += score;
-									accum[id].score += score;
-								}
-								if(compressions && compressed.includes(word)) {
-									if(!accum[id].compressions[word]) {
-										accum[id].compressions[word] = 0;
-									}
-									const score = node[id].compressions * .75;
-									accum[id].compressions[word] += score;
-									accum[id].score += score;
-									count || (count = 1);
-								}
-								accum[id].count += count;
-							});
+			const	text = _toText(objectOrText),
+				tokens = objectOrText ? _tokenize(text,type==="object") : [],
+				stemmed = (stems || type==="object" ? tokens.reduce((accum,token) => 
+				{ 
+					const type = typeof(token);
+					if(type!=="number" && type!=="boolean") {
+						const stem = _stemmer(token);
+						if(!stops[stem]) {
+							accum.push(stem);
 						}
 					}
 					return accum;
-					},{});
+				},[]) : []),
+				other = tokens.filter(token => token==="true" || token==="false" || !isNaN(parseFloat(token))),
+				noproperties = (stems ? stemmed : tokens).filter(token => token[token.length-1]!==":" && isNaN(parseFloat(token)) && token!=="true" && token!=="false"),
+				grams = trigrams ? _trigrams(noproperties) : [],
+				compressed = compressions ? noproperties.map(stem => _compress(stem)) : [],
+				results = [];
+				for(const word of stemmed.concat(grams).concat(compressed).concat(other)) {
+					if(!stops[word]) {
+						const node = await get(word),
+							isboolean = word==="false" || word==="true",
+							isnumber = !isNaN(parseFloat(word));
+						if(node) {
+							Object.keys(node).forEach(id => {
+								if(!results[id]) {
+									results[id] = {score:0,count:0,stems:{},trigrams:{},compressions:{},booleans:{},numbers:{}};
+								}
+								let count = 0;
+								if(isboolean) {
+									if(!results[id].booleans[word]) {
+										results[id].booleans[word] = 0;
+									}
+									results[id].booleans[word] += node[id].booleans;
+									results[id].score += node[id].booleans;
+									count = 1;
+								}
+								if(isnumber) {
+									if(!results[id].numbers[word]) {
+										results[id].numbers[word] = 0;
+									}
+									results[id].numbers[word] += node[id].numbers;
+									results[id].score += node[id].numbers;
+									count = 1;
+								}
+								if(stems && stemmed.includes(word)) {
+									if(!results[id].stems[word]) {
+										results[id].stems[word] = 0;
+									}
+									results[id].stems[word] += node[id].stems;
+									results[id].score += node[id].stems;
+									count = 1;
+								}
+								if(trigrams && grams.includes(word)) {
+									if(!results[id].trigrams[word]) {
+										results[id].trigrams[word] = 0
+									}
+									const score = node[id].trigrams * .5;
+									results[id].trigrams[word] += score;
+									results[id].score += score;
+								}
+								if(compressions && compressed.includes(word)) {
+									if(!results[id].compressions[word]) {
+										results[id].compressions[word] = 0;
+									}
+									const score = node[id].compressions * .75;
+									results[id].compressions[word] += score;
+									results[id].score += score;
+									count || (count = 1);
+								}
+								results[id].count += count;
+							});
+						}
+					}
+				}
 				const properties = type==="object" ? Object.keys(objectOrText) : [];
 				return Object.keys(results)
 					.reduce((accum,id) => {
 						const result = results[id];
 						if(result.score>0) {
-							// if matching an object, find at least one top level matching property name
-							// and a matched stem value that is not a property name
+							// if matching an object, 
+							// find at least one top level matching property name
+							// and a matched value
+							const method = all ? "every" : "some";
 							if(type==="object") {
-								if(properties.some(property => result.stems[property+":"]) 
-										&& Object.keys(result.stems).some(key => !properties.includes(key.substring(0,key.length-1)))) {
+								if(properties[method](property => {
+									if(result.stems[property+":"]) {
+										const value = objectOrText[property];
+										if(value=="true" || value=="false") {
+											if(result.booleans[value]) return true;
+										} else if(typeof(value)==="number") {
+											if(result.numbers[value]) return true;
+										} else {
+											const stemmed = _tokenize(value).map(token => _stemmer(token));
+											return stemmed.some(stem => result.stems[stem]);
+										}
+									}
+								})) {
 									accum.push(Object.assign({id:_coerceId(id)},result));
 								}
+							} else if(all) {
+								if(stems && Object.keys(result.stems).length===0 && Object.keys(result.numbers).length===0 && Object.keys(result.booleans).length===0) return accum;
+								if(trigrams && Object.keys(result.trigrams).length===0) return accum;
+								if(compressions && Object.keys(result.compressions).length===0) return accum;
+								accum.push(Object.assign({id:_coerceId(id)},result));
 							} else {
 								accum.push(Object.assign({id:_coerceId(id)},result));
 							}
