@@ -613,6 +613,7 @@
 								if(properties[method](property => {
 									if(result.stems[property+":"]) {
 										const value = objectOrText[property];
+										if(value==="_*_") return true;
 										if(value=="true" || value=="false") {
 											if(result.booleans[value]) return true;
 										} else if(typeof(value)==="number") {

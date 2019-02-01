@@ -1,6 +1,6 @@
 {
   "name": "txi",
-  "version": "v0.0.5b",
+  "version": "v0.0.6b",
   "description": "Small, focused full-text indexing and search for any JavaScript application",
   "engines": {},
   "license": "MIT",

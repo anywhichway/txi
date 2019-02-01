@@ -4,7 +4,7 @@ Small, focused full-text indexing and search for any JavaScript application.
 
 Txi does just two things:
 
-1) It creates a full text index of strings or JavaScript objects passed to it and associates it with an id also passed in.
+1) It creates a full text index of strings or JavaScript objects passed to it and associates entries with an id also passed in.
 
 2) It supports index searching and returns a rank ordered list of matches including the id to be used by the calling application to retrieve the original data.
 
@@ -108,11 +108,11 @@ Creates a Txi text indexer with default settings.
 
 The boolean flags indicate which features of `txi` to turn on. See [Managing Memory and Accuracy](#managing-memory-and-accuracy) for more details. 
 
-The `storage` option should be provided `get(key)`, `set(key,value)`, `count()` and `keys()` methods which will be used to automartically save index fragments to a key/value store like `localStorage` or `Redis`. If the `storage` options is provided, `txi` uses far less RAM because no in memory index is mainatined. If you need caching, implement it within your `get` and `set` functions.
+The `storage` option should be provided methods `get(key)`, `set(key,value)`, `count()` and `keys()` which will be used to automatically save index fragments to a key/value store like `localStorage` or `Redis`. If the `storage` option is provided, `txi` uses far less RAM because no in memory index is mainatined. If you need caching, implement it within your `get` and `set` functions.
 
 Using `new` is not required. 
 
-`Array stops` - Replaces the array of stop words, i.e. words that are not added to the index.
+`Array stops` - Replaces the array of stop words, i.e. words that are not added to the index. To just add words use the instance function `addStops`.
 
 ### Txi addStops(string word[,...])
 
@@ -124,7 +124,7 @@ As items are deleted from the index, keys may end-up without id entries. This re
 
 ### object getIndex() 
 
-Returns a copy of the internal index data structure. See [Index Structure](#index-structure) below for more details. Throws an error if the Txi instaance was started with a `storage` option.
+Returns a copy of the internal index data structure. See [Index Structure](#index-structure) below for more details. Throws an error if the Txi instance was started with a `storage` option.
 
 ### Txi async index(string||number id,string||object data)
 
@@ -167,7 +167,7 @@ Setting the property `onchange` to `callback` causes `callback` to be invoked wi
 
 ### Txi async remove(string||number id)
 
-Removes the `id` and its index values from a Txi instance. No-op if the `id` does not exist. Returns the instance. 
+Removes the `id` and its index values from a Txi instance. No-op if the `id` does not exist. Returns the a Promise for the instance. 
 
 ### Txi removeStops(string word[,...])
 
@@ -175,9 +175,11 @@ Removes the `word`s provided from the words that are not indexed. Returns the Tx
 
 ### [object potentialMatch[,...]] async search(string||object criteria,options=defaults)
 
-Search the index using the `criteria` and return a Promise for an sorted array of potential matches. The `options` default to those values provided during creation of the instance. The `options` flag is used to controll memory useage and the return of false positives or negatives. See the section [Managing Memory and Accuracy](#managing-memory-and-accuracy) below.
+Search the index using the `criteria` and return a Promise for an sorted array of potential matches. The `options` default to those values provided during creation of the instance. The `options` flag is used to control memory useage and the return of false positives or negatives. See the section [Managing Memory and Accuracy](#managing-memory-and-accuracy) below.
 
 In addition to the `txi` start-up options, the `options` object can also take the boolean property `all`. When an `object` is the search criteria every top level property on the object must be matched. When a `string` is the search criteria, then the key count for each of the index types accessed (stems, trigrams, compressions) must be greater than 0.
+
+There is a special property value `_*_`. If this value is present, then Txi will simply return all objects that contain the property and not attempt to match the value against booleans, numbers, stems, trigrams, or disemvowels.
 
 A `potentialMatch` has the form:
 
@@ -237,13 +239,13 @@ A search for "not found" returns a single element array like this:
 
 `Txi` creates an index by tokenizing a string and using the stems of non-stop words, the likely misspellings of stems, disemvoweled stems, trigrams of all the stems concatenated together, and tokens than can be numbers or booleans to create a data structure that keeps track of what items are associated with ids passed in during the index process along with their frequency of occurence. See [Index Structure](#index-structure) below.
 
-`Txi` searches an index by tokenizing a string and using the stems of non-stop words, the likely misspellings of stems, disemvoweled stems, trigrams of all the stems concatenated together, and tokens than can be numbers or booleans to look for matches in the index. The total frequency of each item matched item is summed for the match type, e.g. stems are summed separate from trigrams. The sum of all of these in a score for which a higher value indicates a more likely match. Most searches return more than one result and are sorted in a descending manner by score.
+`Txi` searches an index by tokenizing a string and using the stems of non-stop words, the likely misspellings of stems, disemvoweled stems, trigrams of all the stems concatenated together, and tokens than can be numbers or booleans to look for matches in the index. The total frequency of each item matched item is summed for the match type, e.g. stems are summed separate from trigrams. The sum of all of these is a score for which a higher value indicates a more likely match. Most searches return more than one result and are sorted in a descending manner by score.
 
 Possible misspellings are generated during indexing and added to the index. This is done because reversing out search misspellings would require a large dictionary. Misspellings are generated through the use of [patterns identified by the Oxford Dictionary](https://en.oxforddictionaries.com/spelling/common-misspellings). 
 
 An additional reason for indexing misspellings is that searches may include atomic typos. These would be impossible to reverse without doing a full semantic and syntactic analysis of the search. 
 
-The most likely impact of misspellings is false positives during search, particularly due to trigram changes. However, by default `txi` uses a scoring algorithm across multiple indexable features, i.e. stem, trigrams, disemvoweled stems, and misspelling. Hence, false positives will generally have a lower score and be later in the search results.
+The most likely impact of misspellings is false positives during search, particularly due to trigram changes. However, by default `txi` uses a scoring algorithm across multiple indexable features, i.e. stems, trigrams, disemvoweled stems, and misspellings. Hence, false positives will generally have a lower score and be later in the search results.
 
 A statistical analysis of the effectiveness of `txi` scoring would be interesting, but is beyond the capacity of the package author at this time.
 
@@ -317,7 +319,7 @@ Below is an annotated index for "In March, the solidiers marched in solidarity w
 
 ## Storing and Restoring an Index
 
-If a `storage` option is provided during initialization with `get(key)`, `set(key,value)`, `count`, `keys` methods storing and restoring the index is automatic and far less RAM will be used by `txi` since no in memory index is required.
+If a `storage` option is provided during initialization storing and restoring the index is automatic and far less RAM will be used by `txi` since no in memory index is required.
 
 Alternatively, you can use an approach similar to that laid out below.
 
@@ -380,11 +382,11 @@ Turning off everything except trigrams is very memory efficient because there ar
 
 Obvioulsy, if you turn everything off including trigrams, you will have an empty index and be unable to retrieve any results!
 
-Note, if you are indexing or searching JavaScript objects, you can't turn off stem indexing because property names with a colon appended are used as index keys. If you try to turn off stem indexing for objects, it wil be automatically turned back on.
+Note, if you are indexing or searching JavaScript objects with stems turned off, stems may show up in the results because property names with a colon appended are used as stem index keys.
 
 ## Terminology
 
-`atomic typo` - An atomic typo occurs when the modification of one character in a string results in a word with a different meaning. Although none of the following match common misspelling patterns, examples of atomic typos include "war", instead of "was"; "bite", instead of "byte"; "massage", instead of "message"; "forman" instead of either "for man" or "foreman". Since the alternate word is actually a word, determining if its presence is a typographical error is not possible without a deep syntatic or semantic analysis.
+`atomic typo` - An atomic typo occurs when the modification of one character in a string results in a word with a different meaning. Although none of the following match common misspelling patterns, examples of atomic typos include "war", instead of "was"; "bite", instead of "byte"; "massage", instead of "message"; "forman" instead of either "for man" or "foreman". Since the alternate word is actually a word, determining if its presence is a typographical error is not possible without a deep syntactic or semantic analysis.
 
 `disemvowel` - To remove vowels from a word to make it shorter, but in most cases still understandable.
 
@@ -395,6 +397,8 @@ Note, if you are indexing or searching JavaScript objects, you can't turn off st
 `trigram` - The series of all three letter character sequences in a string that has punctuation and spaces removed.
 
 ## Updates (reverse chronological order)
+
+2019-02-01 v0.0.6b Added the `_*_` property wildcard. Optimized stem usage when `stems=false` and objects are indexed. Documentation updates.
 
 2019-01-26 v0.0.5b Packaging fix
 
