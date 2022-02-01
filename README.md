@@ -398,6 +398,8 @@ Note, if you are indexing or searching JavaScript objects with stems turned off,
 
 ## Updates (reverse chronological order)
 
+2021-02-31 v0.0.7b Updated dependencies
+
 2019-02-01 v0.0.6b Added the `_*_` property wildcard. Optimized stem usage when `stems=false` and objects are indexed. Documentation updates.
 
 2019-01-26 v0.0.5b Packaging fix
