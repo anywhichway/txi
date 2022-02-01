@@ -5,7 +5,7 @@
   "engines": {},
   "license": "MIT",
   "scripts": {
-    "prepare": "copy index.js browser/txi.js"
+
   },
   "repository": {
     "type": "git",
